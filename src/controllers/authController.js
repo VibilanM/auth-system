@@ -1,5 +1,6 @@
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 async function createUser(req, res) {
     try {
@@ -82,8 +83,17 @@ async function loginUser(req, res) {
             });
         }
 
+        const accessToken = jwt.sign(
+            {
+                userId: user._id,
+                email: user.email
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "15m" }
+        );
+
         res.status(200).json({
-            message: "Login successful."
+            accessToken
         });
     }
     catch (error) {
