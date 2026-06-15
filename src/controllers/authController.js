@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import RefreshToken from "../models/RefreshToken.js";
 
 async function createUser(req, res) {
     try {
@@ -100,6 +101,11 @@ async function loginUser(req, res) {
             { expiresIn: "7d" }
         );
 
+        await RefreshToken.create({
+            token: refreshToken,
+            userId: user._id
+        });
+
         res.status(200).json({
             accessToken,
             refreshToken
@@ -149,21 +155,51 @@ async function refresh(req, res) {
             process.env.REFRESH_SECRET
         );
 
+        const storedToken = await RefreshToken.findOne({
+            token: refreshToken
+        });
+
+        if (!storedToken) {
+            return res.status(403).json({
+                message: "Forbidden"
+            });
+        }
+
+        await RefreshToken.deleteOne({
+            token: refreshToken
+        });
+
+        const newRefreshToken = jwt.sign(
+            {
+                userId: decoded.userId
+            },
+            process.env.REFRESH_SECRET,
+            {
+                expiresIn: "7d"
+            }
+        );
+
         const accessToken = jwt.sign(
             {
-                userId: decoded.userId,
+                userId: decoded.userId
             },
             process.env.JWT_SECRET,
             { expiresIn: "15m" }
         );
 
+        await RefreshToken.create({
+            token: newRefreshToken,
+            userId: decoded.userId
+        });
+
         res.status(200).json({
-            accessToken
+            accessToken: accessToken,
+            refreshToken: newRefreshToken
         });
     }
     catch (error) {
-        res.status(500).json({
-            message: "Internal server error."
+        res.status(403).json({
+            message: "Invalid refresh token."
         });
     }
 }
