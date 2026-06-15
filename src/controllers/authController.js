@@ -92,8 +92,17 @@ async function loginUser(req, res) {
             { expiresIn: "15m" }
         );
 
+        const refreshToken = jwt.sign(
+            {
+                userId: user._id
+            },
+            process.env.REFRESH_SECRET,
+            { expiresIn: "7d" }
+        );
+
         res.status(200).json({
-            accessToken
+            accessToken,
+            refreshToken
         });
     }
     catch (error) {
@@ -106,8 +115,8 @@ async function loginUser(req, res) {
 async function profile(req, res) {
     try {
         const user = await User
-        .findById(req.user.userId)
-        .select("-password");
+            .findById(req.user.userId)
+            .select("-password");
 
         if (!user) {
             return res.status(401).json({
@@ -124,4 +133,39 @@ async function profile(req, res) {
     }
 }
 
-export { createUser, loginUser, profile };
+async function refresh(req, res) {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(401).json({
+            message: "Refresh token required."
+        });
+    }
+
+    try {
+
+        const decoded = jwt.verify(
+            refreshToken,
+            process.env.REFRESH_SECRET
+        );
+
+        const accessToken = jwt.sign(
+            {
+                userId: decoded.userId,
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: "15m" }
+        );
+
+        res.status(200).json({
+            accessToken
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            message: "Internal server error."
+        });
+    }
+}
+
+export { createUser, loginUser, profile, refresh };
