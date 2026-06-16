@@ -2,6 +2,9 @@ import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import RefreshToken from "../models/RefreshToken.js";
+import crypto from "crypto";
+import transporter from "../utils/sendEmail.js";
+
 
 async function createUser(req, res) {
     try {
@@ -32,19 +35,34 @@ async function createUser(req, res) {
             10
         );
 
+        const verificationToken = crypto.randomBytes(32).toString("hex");
+
         const user = await User.create({
             username: username,
             email: email,
-            password: hashedPassword
+            password: hashedPassword,
+            verificationToken: verificationToken,
+            verificationTokenExpiration: Date.now() + 24 * 60 * 60 * 1000
+        });
+
+        const verificationUrl = `http://localhost:${PORT}/auth/verify-email/${verificationToken}`;
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: user.email,
+            subject: "Verify your account",
+            html: `
+            <h2>Welcome!</h2>
+            
+            <p>Click below to verify your account:</p>
+            
+            <a href="${verificationUrl}">Verify Email</a>
+            
+            `
         });
 
         res.status(201).json({
-            message: "User created successfully.",
-            user: {
-                id: user._id,
-                username: user.username,
-                email: user.email
-            }
+            message: "Check your email to verify your account."
         });
     } catch (error) {
         res.status(500).json({
@@ -70,6 +88,12 @@ async function loginUser(req, res) {
         if (!user) {
             return res.status(400).json({
                 message: "Invalid credentials."
+            });
+        }
+
+        if (!user.isVerified) {
+            return res.status(403).json({
+                message: "Please verify your email first."
             });
         }
 
@@ -229,4 +253,38 @@ async function logout(req, res) {
     }
 }
 
-export { createUser, loginUser, profile, refresh, logout };
+async function verifyEmail(req, res) {
+    try {
+        const { token } = req.params;
+
+        const user = await User.findOne({
+            verificationToken: token,
+            verificationTokenExpiration: {
+                $gt: Date.now()
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                message: "Invalid or expired token."
+            });
+        }
+
+        user.isVerified = true;
+        user.verificationToken = undefined;
+        user.verificationTokenExpiration = undefined;
+
+        await user.save();
+
+        res.status(200).json({
+            message: "Email verified successfully"
+        });
+    }
+    catch (error) {
+        res.status(500).json({
+            message: "Internal server error."
+        });
+    }
+}
+
+export { createUser, loginUser, profile, refresh, logout, verifyEmail };
