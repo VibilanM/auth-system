@@ -131,9 +131,20 @@ async function loginUser(req, res) {
             userId: user._id
         });
 
+        res.cookie(
+            "refreshToken",
+            refreshToken,
+            {
+                httpOnly: true,
+                secure: false,
+                sameSite: "strict",
+                maxAge:
+                    7 * 24 * 60 * 60 * 1000
+            }
+        );
+
         res.status(200).json({
-            accessToken,
-            refreshToken
+            accessToken
         });
     }
     catch (error) {
@@ -165,7 +176,7 @@ async function profile(req, res) {
 }
 
 async function refresh(req, res) {
-    const { refreshToken } = req.body;
+    const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
         return res.status(401).json({
@@ -231,7 +242,7 @@ async function refresh(req, res) {
 
 async function logout(req, res) {
     try {
-        const { refreshToken } = req.body;
+        const refreshToken = req.cookies.refreshToken;
 
         if (!refreshToken) {
             return res.status(400).json({
@@ -242,6 +253,8 @@ async function logout(req, res) {
         await RefreshToken.deleteOne({
             token: refreshToken
         });
+
+        res.clearCookie("refreshToken");
 
         res.status(200).json({
             message: "Logged out successfully."
