@@ -5,6 +5,7 @@ import RefreshToken from "../models/RefreshToken.js";
 import crypto from "crypto";
 import transporter from "../utils/sendEmail.js";
 
+const PORT = process.env.PORT || 5000;
 
 async function createUser(req, res) {
     try {
@@ -287,4 +288,83 @@ async function verifyEmail(req, res) {
     }
 }
 
-export { createUser, loginUser, profile, refresh, logout, verifyEmail };
+async function forgotPassword(req, res) {
+    try {
+        const { email } = req.body;
+
+        const user = await User.findOne({
+            email: email
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                message: "User not found."
+            });
+        }
+
+        const resetToken = crypto.randomBytes(32).toString("hex");
+
+        user.resetPasswordToken = resetToken;
+        user.resetPasswordTokenExpiration = Date.now() + 24 * 60 * 60 * 1000;
+
+        await user.save();
+
+        const resetUrl = `http://localhost:${PORT}/auth/reset-password/${resetToken}`;
+
+        await transporter.sendMail({
+            to: user.email,
+            subject: "Reset Account Password",
+            html: `
+            <p>Reset you account password:</p>
+            <a href="${resetUrl}">Reset Password</a>`
+        });
+
+        res.status(200).json({
+            message: "Email sent."
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Internal server error."
+        });
+    }
+}
+
+async function resetPassword(req, res) {
+    try {
+        const { token } = req.params;
+        const { password } = req.body;
+
+        const user = await User.findOne({
+            resetPasswordToken: token,
+            resetPasswordTokenExpiration: {
+                $gt: Date.now()
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({
+                message: "Invalid or expired token."
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        user.password = hashedPassword;
+        user.resetPasswordToken = undefined;
+        user.resetPasswordTokenExpiration = undefined;
+
+        await user.save();
+
+        res.status(200).json({
+            message: "Password reset successfully."
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Internal server error."
+        });
+    }
+}
+
+export { createUser, loginUser, profile, refresh, logout, verifyEmail, forgotPassword, resetPassword };
