@@ -204,4 +204,29 @@ async function refresh(req, res) {
     }
 }
 
-export { createUser, loginUser, profile, refresh };
+async function logout(req, res) {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(400).json({
+                message: "Refresh token required."
+            });
+        }
+
+        await RefreshToken.deleteOne({
+            token: refreshToken
+        });
+
+        res.status(200).json({
+            message: "Logged out successfully."
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Internal server error."
+        });
+    }
+}
+
+export { createUser, loginUser, profile, refresh, logout };
