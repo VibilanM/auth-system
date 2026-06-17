@@ -5,7 +5,7 @@ import RefreshToken from "../models/RefreshToken.js";
 import crypto from "crypto";
 import transporter from "../utils/sendEmail.js";
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
 async function createUser(req, res) {
     try {
